@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MSP Button Maker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent: #610f0b;
+      --border: #d0d0d0;
+      --muted: #666;
+      --bg: #f5f4f2;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: #222;
+      max-width: 760px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.5;
+    }
+
+    header h1 {
+      color: var(--accent);
+      margin: 0 0 0.25rem;
+      font-size: 1.5rem;
+    }
+    header p {
+      color: var(--muted);
+      margin: 0 0 1.5rem;
+      font-size: 0.9rem;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+      font-size: 0.9rem;
+    }
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      min-height: 110px;
+      padding: 0.6rem;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      resize: vertical;
+    }
+    .hint {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin: 0.4rem 0 0;
+    }
+
+    .row {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+    button.action {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.6rem 1.25rem;
+      border-radius: 4px;
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.action:disabled { opacity: 0.5; cursor: default; }
+    button.action.secondary {
+      background: white;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+
+    .preview-wrap {
+      /* This is what gets rasterized. Width matches the original Typst page width (6.2in). */
+      width: 6.2in;
+      max-width: 100%;
+      background: white;
+    }
+
+    .button-preview {
+      box-sizing: border-box;
+      width: 100%;
+      border: 2pt solid var(--accent);
+      padding: 0.7em 0.3em 0.7em 1.5em;
+      display: grid;
+      grid-template-columns: 50pt 1fr;
+      column-gap: 0.3em;
+      align-items: center;
+      font-family: "Source Serif 4", Georgia, Cambria, "Times New Roman", Times, serif;
+      font-size: 9pt;
+      color: #000;
+    }
+    .button-preview .icon svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .button-preview .citation {
+      text-align: center;
+      line-height: 1.4;
+      text-wrap: balance;       /* modern browsers; falls back gracefully */
+    }
+    .button-preview .citation em { font-style: italic; }
+    .button-preview .citation strong { font-weight: bold; }
+    .button-preview .citation a,
+    .button-preview .citation .doi {
+      color: var(--accent);
+      font-weight: bold;
+      text-decoration: none;
+    }
+
+    .error {
+      color: #a13a3a;
+      background: #fbeded;
+      border: 1px solid #e0b6b6;
+      padding: 0.6rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.88rem;
+      margin-top: 1rem;
+    }
+    .hidden { display: none; }
+
+    footer {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-top: 2rem;
+      text-align: center;
+    }
+    footer a { color: var(--muted); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>MSP Button Maker</h1>
+  <p>Generate a downloadable download-button PNG for mediastudies.press chapters and articles.</p>
+</header>
+
+<div class="card">
+  <label for="md">Button Text (Markdown)</label>
+  <textarea id="md" placeholder="Author Name, &quot;Chapter Title,&quot; in *Book Title*, ed. Editor Name (mediastudies.press, 2025), https://doi.org/10.21428/…"></textarea>
+  <p class="hint">Use <code>*italic*</code> for italics, <code>**bold**</code> for bold, and full <code>https://doi.org/…</code> URLs (they render as bold red links).</p>
+
+  <div class="row">
+    <button type="button" class="action" id="renderBtn">Generate preview</button>
+    <button type="button" class="action secondary" id="downloadBtn" disabled>Download PNG</button>
+  </div>
+
+  <div id="errorBox" class="error hidden"></div>
+</div>
+
+<div class="card">
+  <label>Preview</label>
+  <div class="preview-wrap" id="previewWrap">
+    <div class="button-preview">
+      <div class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#610f0b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg></div>
+      <div class="citation" id="citation">
+        <em>Your text here</em>
+      </div>
+    </div>
+  </div>
+  <p class="hint">The downloaded PNG is rasterized from this preview at 3× scale.</p>
+</div>
+
+<footer>
+  Built for mediastudies.press · <a href="https://github.com/mediastudiespress/msp-button-maker" target="_blank">source</a>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+  const mdEl       = document.getElementById("md");
+  const citationEl = document.getElementById("citation");
+  const renderBtn  = document.getElementById("renderBtn");
+  const downloadBtn = document.getElementById("downloadBtn");
+  const errorBox   = document.getElementById("errorBox");
+  const previewWrap = document.getElementById("previewWrap");
+
+  function escapeHtml(s) {
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function mdToHtml(src) {
+    // Strip control chars (e.g. NULs interleaved by UTF-16 clipboard pastes).
+    src = src.replace(/[\x00-\x1F\x7F]/g, "");
+    let s = escapeHtml(src);
+    // Bold first (greedy ** before *)
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+    // Italic
+    s = s.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+    // URLs → bold red links. Trim a trailing period from match so sentence-ending periods stay outside.
+    s = s.replace(/(https?:\/\/[^\s<]+?)([.,;:)]?(?=\s|$|<))/g, '<a href="$1" target="_blank">$1</a>$2');
+    return s;
+  }
+
+  function slugifyForFilename(s) {
+    return s
+      .replace(/[*_`#]/g, "")
+      .replace(/https?:\/\/\S+/g, "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "button";
+  }
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.classList.remove("hidden");
+  }
+  function clearError() {
+    errorBox.classList.add("hidden");
+  }
+
+  renderBtn.addEventListener("click", () => {
+    clearError();
+    const md = mdEl.value.trim();
+    if (!md) {
+      showError("Type or paste a citation in markdown first.");
+      return;
+    }
+    citationEl.innerHTML = mdToHtml(md);
+    downloadBtn.disabled = false;
+  });
+
+  downloadBtn.addEventListener("click", async () => {
+    clearError();
+    renderBtn.disabled = downloadBtn.disabled = true;
+    downloadBtn.textContent = "Rendering…";
+    try {
+      // Wait for Source Serif 4 to finish loading before rasterizing; otherwise
+      // html2canvas can fire while the font is still pending and produce a Georgia-fallback PNG.
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      const canvas = await html2canvas(previewWrap, {
+        scale: 3,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+      });
+      const link = document.createElement("a");
+      const stem = slugifyForFilename(mdEl.value);
+      link.download = `${stem}-button.png`;
+      link.href = canvas.toDataURL("image/png");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      showError("Couldn't render the PNG: " + err.message);
+    } finally {
+      renderBtn.disabled = false;
+      downloadBtn.disabled = false;
+      downloadBtn.textContent = "Download PNG";
+    }
+  });
+
+  // Generate a preview on Enter inside the textarea (Cmd/Ctrl+Enter)
+  mdEl.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      renderBtn.click();
+    }
+  });
+</script>
+
+</body>
+</html>
