@@ -1,1 +1,4 @@
 .DS_Store
+
+# direnv — local env, never commit
+.envrc

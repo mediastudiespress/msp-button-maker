@@ -167,6 +167,11 @@
   </div>
 
   <div id="errorBox" class="error hidden"></div>
+
+  <div id="saveFallback" class="hidden">
+    <p class="hint">Your browser blocked the download. Touch and hold the image below, then choose <strong>Save to Photos</strong> or <strong>Save to Files</strong>.</p>
+    <img alt="Generated button PNG" style="max-width:100%; border:1px solid var(--border);">
+  </div>
 </div>
 
 <div class="card">
@@ -194,6 +199,7 @@
   const downloadBtn = document.getElementById("downloadBtn");
   const errorBox   = document.getElementById("errorBox");
   const previewWrap = document.getElementById("previewWrap");
+  const saveFallback = document.getElementById("saveFallback");
 
   function escapeHtml(s) {
     return s
@@ -235,44 +241,87 @@
     errorBox.classList.add("hidden");
   }
 
-  renderBtn.addEventListener("click", () => {
+  // iPadOS Safari reports a desktop (Macintosh) user agent, so detect it by touch support.
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  let pngFile = null;     // rendered ahead of time so the Download tap can run synchronously
+  let renderToken = 0;
+
+  async function renderPng(stem) {
+    // Wait for Source Serif 4 to finish loading before rasterizing; otherwise
+    // html2canvas can fire while the font is still pending and produce a Georgia-fallback PNG.
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const canvas = await html2canvas(previewWrap, {
+      scale: 3,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+    });
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) throw new Error("the browser couldn't encode the image");
+    return new File([blob], `${stem}-button.png`, { type: "image/png" });
+  }
+
+  function showFallbackImage(file) {
+    // Last resort on iOS: show the PNG itself so it can be touched-and-held to save.
+    saveFallback.querySelector("img").src = URL.createObjectURL(file);
+    saveFallback.classList.remove("hidden");
+  }
+
+  renderBtn.addEventListener("click", async () => {
     clearError();
+    saveFallback.classList.add("hidden");
     const md = mdEl.value.trim();
     if (!md) {
       showError("Type or paste a citation in markdown first.");
       return;
     }
     citationEl.innerHTML = mdToHtml(md);
-    downloadBtn.disabled = false;
+
+    const token = ++renderToken;
+    pngFile = null;
+    downloadBtn.disabled = true;
+    downloadBtn.textContent = "Preparing PNG…";
+    try {
+      const file = await renderPng(slugifyForFilename(md));
+      if (token !== renderToken) return;   // a newer render superseded this one
+      pngFile = file;
+      downloadBtn.disabled = false;
+    } catch (err) {
+      if (token !== renderToken) return;
+      showError("Couldn't render the PNG: " + err.message);
+    } finally {
+      if (token === renderToken) downloadBtn.textContent = "Download PNG";
+    }
   });
 
   downloadBtn.addEventListener("click", async () => {
+    if (!pngFile) return;
     clearError();
-    renderBtn.disabled = downloadBtn.disabled = true;
-    downloadBtn.textContent = "Rendering…";
-    try {
-      // Wait for Source Serif 4 to finish loading before rasterizing; otherwise
-      // html2canvas can fire while the font is still pending and produce a Georgia-fallback PNG.
-      if (document.fonts && document.fonts.ready) await document.fonts.ready;
-      const canvas = await html2canvas(previewWrap, {
-        scale: 3,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-      });
-      const link = document.createElement("a");
-      const stem = slugifyForFilename(mdEl.value);
-      link.download = `${stem}-button.png`;
-      link.href = canvas.toDataURL("image/png");
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (err) {
-      showError("Couldn't render the PNG: " + err.message);
-    } finally {
-      renderBtn.disabled = false;
-      downloadBtn.disabled = false;
-      downloadBtn.textContent = "Download PNG";
+    const file = pngFile;
+
+    // On iPad/iPhone, Safari ignores programmatic <a download> clicks (especially data: URLs),
+    // so hand the file to the share sheet ("Save Image" / "Save to Files") instead.
+    if (isIOS && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+        return;
+      } catch (err) {
+        if (err.name === "AbortError") return;   // user dismissed the sheet
+        showFallbackImage(file);
+        return;
+      }
     }
+
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.download = file.name;
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    if (isIOS) showFallbackImage(file);   // older iOS without file sharing
   });
 
   // Generate a preview on Enter inside the textarea (Cmd/Ctrl+Enter)
